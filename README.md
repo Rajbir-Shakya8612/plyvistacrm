@@ -263,11 +263,7 @@ kya aap aese kr skte hai sbhi controller ke code ke method main taaki data shi s
    // Always return JSON for API requests
             if ($request->wantsJson()) {
                 return response()->json([
-                    'is_checked_in' => $attendance && $attendance->check_in_time,
-                    'is_checked_out' => $attendance && $attendance->check_out_time,
-                    'status' => $attendance ? $attendance->status : null,
-                    'check_in_time' => $attendance ? $attendance->check_in_time : null,
-                    'check_out_time' => $attendance ? $attendance->check_out_time : null
+                 
                 ]);
             }
         return view('admin.dashboard', compact());
@@ -334,3 +330,40 @@ SQL Injection से बचने के लिए Query Binding का उप�
 ✅ Attendance Dashboard बनाएं (जहां ग्राफ, स्टेट्स और महीने की रिपोर्ट दिखे)।
 ✅ Push Notifications जोड़ें (लेट आने पर सेल्सपर्सन को नोटिफिकेशन मिले)।
 ✅ GPS Location Accuracy सुधारें (फ्रंटेंड पर Google Maps API के साथ)।
+
+
+
+isme mujhe register pr kuch kmi lgi hai aapko btana chahunga main
+
+1. register hone ke baad wo login pr jana chahiye ya fir or uske baad jb login kre to role ke hisab se uske dashboard pr jaaye isse theek kre phle
+2. admin ka dashboard bhi kuch modern tarike se design kre jo aese image main dikha rakha hai kuch vese taaki saleperson ya jo bhi uske user honge unki saari informations task, bgera sb kuch achhe se dekh ske image main diye design ko apne data ke hisab se kre dynmic or usko bootstrap5+js ka use krke design kre
+
+
+kya aap aese kr skte hai sbhi controller ke code ke method main taaki data shi se unke dashboard pr pahunch ske
+   // Always return JSON for API requests
+            if ($request->wantsJson()) {
+                return response()->json([
+                 
+                ]);
+            }
+        return view('admin.dashboard', compact());
+        return view('salesperson.dashboard', compact());
+
+3. admin dashboard pr attandance ka chart bhi dikhana hai per salesperson ke hisab se mtlb jo bhi uske pass salesperson aayege wo monthly, weekly and yearly teeno tarah ka with percentage ki kitna present tha kitna absent kitni leave thi with calendar ke sath dikhe
+4. admin ko ek access dena hai ki present salesperson ki locations dekh ske ki kahan kahan gya hai or kitne time kahan rha hai wo sb kuch or history bhi banni chahiye google ki tarah alag se
+ 5. admin ke pass salesperson ki sb kuch chije dikhe jo bhi hai uske events, task
+ 6. admin ke pass salesperson ka sb kuch show hide krne ka option hona chahiye ki usse kya dikhana hai kya nhi jis salesperson pr click kre usi ke table main se
+ 7.  admin ke pass sbhi chijo ke chart banne chahiye or wo api se jsonwant main or compact se view pr dono pr ho ske
+
+8. sbhi ko design kre or api routes agar bane hai admin ke salesperson ke to unhe use kre agar nhi bne hai to aap bana kr controller main logics likhe fir unhi logics ko UI main lagaye shi se koi errors issue problem na rhe
+
+9. Lead ka task admin daal skta hai -> per day ki jese 10lead di usne 2 lead complete ki hai to baaki 8 lead pending dikha de uncomplete your target today leads.
+10.  sales ka task admin daal skta hai salesperson ko target -> jese 20lakh ka diya or kiya 2lakh ka monthly
+    Whatsapp sms jaaye attandance with status, lead task, sales task 
+    sales force main target diya tha mothly, weekly, quarterly, Yealy
+11.  jese hi month ki 1 tarik aaye plan lena hai ki iss month kya krege 
+12. lead plans, sales plan ka target denge salesperson khud admin ko wo admin ko dikhe -> option dene honge target diya tha mothly, weekly, quarterly, Yealy
+13.  Meeting ka option -> reminder date pr
+    reminder date nikal jaaye to uska status pending main rahega ne delete kr skta hai
+
+image main jo design hai wo admin dashboard main banaye vesa hi with dynmic kre sbhi chije usme

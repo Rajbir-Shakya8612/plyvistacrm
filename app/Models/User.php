@@ -17,7 +17,7 @@ class User extends Authenticatable
     /**
      * The attributes that are mass assignable.
      *
-     * @var list<string>
+     * @var array<int, string>
      */
     protected $fillable = [
         'name',
@@ -35,13 +35,13 @@ class User extends Authenticatable
         'status',
         'settings',
         'target_amount',
-        'target_leads'
+        'target_leads',
     ];
 
     /**
      * The attributes that should be hidden for serialization.
      *
-     * @var list<string>
+     * @var array<int, string>
      */
     protected $hidden = [
         'password',
@@ -49,79 +49,107 @@ class User extends Authenticatable
     ];
 
     /**
-     * Get the attributes that should be cast.
+     * The attributes that should be cast.
      *
-     * @return array<string, string>
+     * @var array<string, string>
      */
-    protected function casts(): array
+    protected $casts = [
+        'email_verified_at' => 'datetime',
+        'password' => 'hashed',
+        'date_of_joining' => 'date',
+        'settings' => 'array',
+        'target_amount' => 'decimal:2',
+        'target_leads' => 'integer',
+        'status' => 'boolean',
+    ];
+
+    /**
+     * Get the user's photo URL.
+     */
+    public function getPhotoUrlAttribute(): string
     {
-        return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-            'date_of_joining' => 'date',
-            'settings' => 'array',
-            'target_amount' => 'decimal:2',
-            'target_leads' => 'integer'
-        ];
+        return $this->photo
+            ? asset('storage/' . $this->photo)
+            : asset('images/default-avatar.png');
     }
 
-    public function attendances(): HasMany
-    {
-        return $this->hasMany(Attendance::class);
-    }
-
-    public function leads(): HasMany
-    {
-        return $this->hasMany(Lead::class);
-    }
-
-    public function sales(): HasMany
-    {
-        return $this->hasMany(Sale::class);
-    }
-
-    public function locationTracks(): HasMany
-    {
-        return $this->hasMany(LocationTrack::class);
-    }
-
-    public function schedule()
-    {
-        return $this->hasMany(Schedule::class);
-    }
-
-    public function activities()
-    {
-        return $this->hasMany(Activity::class);
-    }
-
+    /**
+     * Check if user is admin
+     */
     public function isAdmin(): bool
     {
         return $this->role === 'admin';
     }
 
+    /**
+     * Check if user is salesperson
+     */
     public function isSalesperson(): bool
     {
         return $this->role === 'salesperson';
     }
 
+    /**
+     * Check if user is dealer
+     */
     public function isDealer(): bool
     {
         return $this->role === 'dealer';
     }
 
+    /**
+     * Check if user is carpenter
+     */
     public function isCarpenter(): bool
     {
         return $this->role === 'carpenter';
     }
 
+    /**
+     * Check if user is active
+     */
     public function isActive(): bool
     {
-        return $this->status === 'active';
+        return $this->status;
     }
 
-    public function getPhotoUrlAttribute(): ?string
+    /**
+     * Get user's attendances
+     */
+    public function attendances(): HasMany
     {
-        return $this->photo ? asset('storage/' . $this->photo) : null;
+        return $this->hasMany(Attendance::class);
+    }
+
+    /**
+     * Get user's leads
+     */
+    public function leads(): HasMany
+    {
+        return $this->hasMany(Lead::class);
+    }
+
+    /**
+     * Get user's sales
+     */
+    public function sales(): HasMany
+    {
+        return $this->hasMany(Sale::class);
+    }
+
+    /**
+     * Get user's location tracks
+     */
+    public function locationTracks(): HasMany
+    {
+        return $this->hasMany(LocationTrack::class);
+    }
+
+    /**
+     * Get user's tasks
+     */
+    public function tasks(): HasMany
+    {
+        return $this->hasMany(Task::class);
     }
 }

@@ -7,48 +7,32 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
-    public function login(Request $request)
-    {
-        $request->validate([
-            'email' => 'required|email',
-            'password' => 'required',
-        ]);
-
-        if (!Auth::attempt($request->only('email', 'password'))) {
-            throw ValidationException::withMessages([
-                'email' => ['The provided credentials are incorrect.'],
-            ]);
-        }
-
-        $user = User::where('email', $request->email)->first();
-        $token = $user->createToken('auth-token')->plainTextToken;
-
-        return response()->json([
-            'user' => $user,
-            'token' => $token
-        ]);
-    }
-
     public function register(Request $request)
     {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|min:8|confirmed',
-            'role' => 'required|in:admin,salesperson,dealer,carpenter',
-            'phone' => 'required|string|max:20',
-            'whatsapp_number' => 'required|string|max:20',
-            'pincode' => 'required|string|max:10',
-            'address' => 'required|string',
-            'location' => 'required|string',
-            'designation' => 'required|string',
-            'date_of_joining' => 'required|date',
-            'status' => 'required|in:active,inactive',
+        $validator = Validator::make($request->all(), [
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
+            'password' => ['required', 'confirmed', Password::defaults()],
+            'role' => ['required', 'string', 'in:admin,salesperson,dealer,carpenter'],
+            'phone' => ['required', 'string', 'max:20'],
+            'whatsapp_number' => ['required', 'string', 'max:20'],
+            'pincode' => ['required', 'string', 'max:10'],
+            'address' => ['required', 'string'],
+            'date_of_joining' => ['required', 'date'],
         ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
 
         $user = User::create([
             'name' => $request->name,
@@ -59,24 +43,63 @@ class AuthController extends Controller
             'whatsapp_number' => $request->whatsapp_number,
             'pincode' => $request->pincode,
             'address' => $request->address,
-            'location' => $request->location,
-            'designation' => $request->designation,
             'date_of_joining' => $request->date_of_joining,
-            'status' => $request->status,
+            'status' => 'active',
         ]);
 
-        $token = $user->createToken('auth-token')->plainTextToken;
+        $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
+            'message' => 'Registration successful',
+            'token' => $token,
             'user' => $user,
-            'token' => $token
         ], 201);
+    }
+
+    public function login(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => ['required', 'string', 'email'],
+            'password' => ['required', 'string'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $user = User::where('email', $request->email)->first();
+
+        if (!$user || !Hash::check($request->password, $user->password)) {
+            return response()->json([
+                'message' => 'Invalid credentials'
+            ], 401);
+        }
+
+        if ($user->status !== 'active') {
+            return response()->json([
+                'message' => 'Your account is not active'
+            ], 403);
+        }
+
+        $token = $user->createToken('auth_token')->plainTextToken;
+
+        return response()->json([
+            'message' => 'Login successful',
+            'token' => $token,
+            'user' => $user,
+        ]);
     }
 
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();
-        return response()->json(['message' => 'Logged out successfully']);
+
+        return response()->json([
+            'message' => 'Logged out successfully'
+        ]);
     }
 
     public function user(Request $request)
