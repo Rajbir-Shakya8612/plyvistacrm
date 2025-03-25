@@ -26,6 +26,10 @@
     <link href='https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.10/main.min.css' rel='stylesheet'>
     <script src='https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.10/main.min.js'></script>
 
+    <script>
+        const token = 'Bearer ' + localStorage.getItem('token');
+        axios.defaults.headers.common['Authorization'] = token;
+</script>
     <!-- Custom CSS -->
     <style>
         :root {

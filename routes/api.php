@@ -11,6 +11,8 @@ use App\Http\Controllers\SalespersonController;
 use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\PerformanceController;
+use App\Http\Controllers\DealerController;
+use App\Http\Controllers\CarpenterController;
 
 /*
 |--------------------------------------------------------------------------
@@ -28,12 +30,14 @@ Route::post('/register', [AuthController::class, 'register'])->name('api.registe
 Route::post('/login', [AuthController::class, 'login'])->name('api.login');
 
 // Protected routes
-Route::middleware(['auth:sanctum'])->group(function () {
+Route::middleware('auth:sanctum')->get('/admin/dashboard', [AdminController::class, 'dashboard'])->name('api.admin.dashboard');
+
+Route::middleware(['auth.api','auth:sanctum'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
 
     // Admin routes
     Route::middleware(['role:admin'])->prefix('admin')->group(function () {
-        Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('api.admin.dashboard');
+        
         Route::get('/attendance-data', [AdminController::class, 'getAttendanceData']);
         Route::get('/performance-data', [AdminController::class, 'getPerformanceData']);
         Route::get('/recent-activities', [AdminController::class, 'getRecentActivities']);
@@ -68,8 +72,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // Salesperson routes
     Route::middleware(['role:salesperson'])->prefix('salesperson')->group(function () {
         Route::get('/dashboard', [SalespersonController::class, 'dashboard'])->name('api.salesperson.dashboard');
-        Route::get('/performance', [SalespersonController::class, 'getPerformance']);
-        Route::get('/recent-activities', [SalespersonController::class, 'getRecentActivities']);
+        Route::get('/leads', [LeadController::class, 'index']);
+        Route::get('/sales', [SaleController::class, 'index']);
+        Route::get('/attendance', [AttendanceController::class, 'index']);
+        Route::get('/performance', [PerformanceController::class, 'index']);
         
         // Attendance
         Route::post('/attendance/checkin', [AttendanceController::class, 'checkIn']);
@@ -77,19 +83,27 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/attendance/status', [AttendanceController::class, 'status']);
 
         // Leads
-        Route::get('/leads', [LeadController::class, 'index']);
         Route::post('/leads', [LeadController::class, 'store']);
         Route::get('/leads/{lead}', [LeadController::class, 'show']);
         Route::put('/leads/{lead}', [LeadController::class, 'update']);
 
         // Sales
-        Route::get('/sales', [SaleController::class, 'index']);
         Route::post('/sales', [SaleController::class, 'store']);
         Route::get('/sales/{sale}', [SaleController::class, 'show']);
         Route::put('/sales/{sale}', [SaleController::class, 'update']);
 
         // Location updates
         Route::post('/location/update', [LocationController::class, 'update']);
+    });
+
+    // Dealer routes
+    Route::middleware(['role:dealer'])->prefix('dealer')->group(function () {
+        Route::get('/dashboard', [DealerController::class, 'dashboard'])->name('api.dealer.dashboard');
+    });
+
+    // Carpenter routes
+    Route::middleware(['role:carpenter'])->prefix('carpenter')->group(function () {
+        Route::get('/dashboard', [CarpenterController::class, 'dashboard'])->name('api.carpenter.dashboard');
     });
 
     // Common routes for all authenticated users

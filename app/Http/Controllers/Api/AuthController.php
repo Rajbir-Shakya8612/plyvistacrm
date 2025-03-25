@@ -78,7 +78,7 @@ class AuthController extends Controller
             ], 401);
         }
 
-        if ($user->status !== 'active') {
+        if ($user->status != 'active') {
             return response()->json([
                 'message' => 'Your account is not active'
             ], 403);

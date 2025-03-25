@@ -13,6 +13,7 @@
                     </div>
 
                     <form id="loginForm" class="needs-validation" novalidate>
+                        @csrf
                         <div class="mb-3">
                             <label for="email" class="form-label">Email Address</label>
                             <input type="email" class="form-control" id="email" name="email" required>
@@ -53,6 +54,9 @@
 
 @push('scripts')
 <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="{{ asset('js/services/auth.js') }}"></script>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const loginForm = document.getElementById('loginForm');
@@ -84,28 +88,84 @@ document.addEventListener('DOMContentLoaded', function() {
 
         try {
             const formData = new FormData(loginForm);
-            const response = await axios.post('/api/login', Object.fromEntries(formData), {
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json'
+            const credentials = Object.fromEntries(formData);
+            
+            // First try web authentication
+            try {
+                const response = await axios.post('/login', credentials, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+
+                if (response.data.success) {
+                    const user = response.data.user;
+                    
+                    // Show success message
+                    await Swal.fire({
+                        icon: 'success',
+                        title: 'Login Successful',
+                        text: 'Redirecting to dashboard...',
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
+
+                    // Role-based redirection
+                    switch(user.role) {
+                        case 'admin':
+                            window.location.href = '/admin/dashboard';
+                            break;
+                        case 'salesperson':
+                            window.location.href = '/salesperson/dashboard';
+                            break;
+                        case 'dealer':
+                            window.location.href = '/dealer/dashboard';
+                            break;
+                        case 'carpenter':
+                            window.location.href = '/carpenter/dashboard';
+                            break;
+                        default:
+                            window.location.href = '/dashboard';
+                    }
                 }
-            });
-
-            if (response.data.success) {
-                // Store token in localStorage
-                localStorage.setItem('auth_token', response.data.token);
+            } catch (webError) {
+                // If web auth fails, try API authentication
+                const apiResponse = await window.authService.login(credentials);
                 
-                // Set default authorization header for future requests
-                axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`;
+                if (apiResponse.success) {
+                    const user = apiResponse.user;
+                    
+                    await Swal.fire({
+                        icon: 'success',
+                        title: 'Login Successful',
+                        text: 'Redirecting to dashboard...',
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
 
-                // Redirect to appropriate dashboard
-                window.location.href = response.data.redirect_url;
-            } else {
-                throw new Error(response.data.message || 'Login failed');
+                    // Role-based API redirection
+                    switch(user.role) {
+                        case 'admin':
+                            window.location.href = '/api/admin/dashboard';
+                            break;
+                        case 'salesperson':
+                            window.location.href = '/api/salesperson/dashboard';
+                            break;
+                        case 'dealer':
+                            window.location.href = '/api/dealer/dashboard';
+                            break;
+                        case 'carpenter':
+                            window.location.href = '/api/carpenter/dashboard';
+                            break;
+                        default:
+                            window.location.href = '/api/dashboard';
+                    }
+                }
             }
         } catch (error) {
-            const errors = error.response?.data?.errors || {};
-            const message = Object.values(errors).flat()[0] || error.response?.data?.message || 'Login failed. Please try again.';
+            console.error('Login error:', error);
+            const message = error.response?.data?.message || error.message || 'Login failed. Please try again.';
             
             Swal.fire({
                 icon: 'error',

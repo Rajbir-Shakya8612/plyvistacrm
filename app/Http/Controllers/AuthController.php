@@ -54,9 +54,9 @@ class AuthController extends Controller
     }
 
     /**
-     * Handle user login
+     * Handle web login
      */
-    public function login(Request $request)
+    public function webLogin(Request $request)
     {
         try {
             $credentials = $request->validate([
@@ -71,24 +71,23 @@ class AuthController extends Controller
             }
 
             $user = Auth::user();
-            
-            // Revoke all existing tokens
-            $user->tokens()->delete();
-            
-            // Create new token
+
+            // Create token for API access
             $token = $user->createToken('auth-token')->plainTextToken;
+            session(['token' => $token]);
+
+            $request->session()->regenerate();
 
             if ($request->wantsJson()) {
                 return response()->json([
                     'success' => true,
                     'message' => 'Login successful',
-                    'token' => $token,
                     'user' => $user,
-                    'redirect_url' => $this->getRedirectUrl($user)
+                    'token' => $token
                 ]);
             }
 
-            return redirect($this->getRedirectUrl($user));
+            return redirect()->intended($this->getRedirectUrl($user));
         } catch (\Exception $e) {
             if ($request->wantsJson()) {
                 return response()->json([
@@ -102,6 +101,46 @@ class AuthController extends Controller
     }
 
     /**
+     * Handle API login
+     */
+    public function login(Request $request)
+    {
+        try {
+            $credentials = $request->validate([
+                'email' => ['required', 'string', 'email'],
+                'password' => ['required', 'string'],
+            ]);
+
+            if (!Auth::attempt($credentials)) {
+                throw ValidationException::withMessages([
+                    'email' => ['The provided credentials are incorrect.'],
+                ]);
+            }
+
+            $user = Auth::user();
+
+            // Revoke all existing tokens
+            $user->tokens()->delete();
+
+            // Create new token
+            $token = $user->createToken('auth-token')->plainTextToken;
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Login successful',
+                'token' => $token,
+                'user' => $user
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Login failed',
+                'errors' => $e instanceof ValidationException ? $e->errors() : [$e->getMessage()]
+            ], 422);
+        }
+    }
+
+    /**
      * Handle user logout
      */
     public function logout(Request $request)
@@ -110,6 +149,8 @@ class AuthController extends Controller
             $request->user()->currentAccessToken()->delete();
         }
         Auth::guard('web')->logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
 
         if ($request->wantsJson()) {
             return response()->json([
@@ -124,14 +165,14 @@ class AuthController extends Controller
     /**
      * Get redirect URL based on user role
      */
-    private function getRedirectUrl(User $user): string
+    private function getRedirectUrl(User $user)
     {
         return match($user->role) {
-            'admin' => route('api.admin.dashboard'),
-            'salesperson' => route('api.salesperson.dashboard'),
+            'admin' => route('admin.dashboard'),
+            'salesperson' => route('salesperson.dashboard'),
             'dealer' => route('dealer.dashboard'),
             'carpenter' => route('carpenter.dashboard'),
-            default => route('login'),
+            default => route('login')
         };
     }
 } 

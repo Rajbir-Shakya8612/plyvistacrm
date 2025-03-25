@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use App\Http\Controllers\Controller;
 
 class AdminController extends Controller
 {
@@ -22,8 +23,8 @@ class AdminController extends Controller
         try {
             $stats = $this->getDashboardStats();
             $taskBoard = $this->getTaskBoard();
-            $attendanceData = $this->getAttendanceData();
-            $recentActivities = $this->getRecentActivities();
+            $attendanceData = $this->fetchAttendanceReport($request->get('filter', 'month'));
+            $recentActivities = $this->getRecentActivitiesReport();
 
             if ($request->wantsJson()) {
                 return response()->json([
@@ -37,7 +38,14 @@ class AdminController extends Controller
                 ]);
             }
 
-            return view('admin.dashboard', compact('stats', 'taskBoard', 'attendanceData', 'recentActivities'));
+
+            // Return view with data
+            return view('admin.dashboard', [
+                'stats' => $stats,
+                'taskBoard' => $taskBoard,
+                'attendanceData' => $attendanceData,
+                'recentActivities' => $recentActivities,
+            ]);
         } catch (\Exception $e) {
             if ($request->wantsJson()) {
                 return response()->json([
@@ -53,7 +61,7 @@ class AdminController extends Controller
     /**
      * Get attendance data for chart
      */
-    private function getAttendanceData(string $filter)
+    private function fetchAttendanceReport(string $filter = 'month')
     {
         $startDate = match($filter) {
             'week' => now()->startOfWeek(),
@@ -101,7 +109,7 @@ class AdminController extends Controller
     /**
      * Get recent activities
      */
-    private function getRecentActivities()
+    private function getRecentActivitiesReport()
     {
         $activities = collect();
 
@@ -276,7 +284,7 @@ class AdminController extends Controller
     public function getAttendanceData(Request $request)
     {
         try {
-            $data = $this->getAttendanceData();
+            $data = $this->fetchAttendanceReport();
 
             if ($request->wantsJson()) {
                 return response()->json([
@@ -332,7 +340,7 @@ class AdminController extends Controller
     public function getRecentActivities(Request $request)
     {
         try {
-            $activities = $this->getRecentActivities();
+            $activities = $this->getRecentActivitiesReport();
 
             if ($request->wantsJson()) {
                 return response()->json([
@@ -352,5 +360,50 @@ class AdminController extends Controller
             }
             throw $e;
         }
+    }
+
+    /**
+     * Get dashboard statistics
+     */
+    private function getDashboardStats()
+    {
+        $today = now();
+        $startOfMonth = $today->copy()->startOfMonth();
+        $startOfYear = $today->copy()->startOfYear();
+
+        return [
+            'total_users' => User::count(),
+            'total_leads' => Lead::count(),
+            'total_sales' => Sale::count(),
+            'monthly_sales' => Sale::where('created_at', '>=', $startOfMonth)->sum('amount'),
+            'yearly_sales' => Sale::where('created_at', '>=', $startOfYear)->sum('amount'),
+            'active_users' => User::where('status', true)->count(),
+            'pending_tasks' => Task::where('status', 'pending')->count(),
+            'completed_tasks' => Task::where('status', 'completed')->count(),
+        ];
+    }
+
+    /**
+     * Get task board data
+     */
+    private function getTaskBoard()
+    {
+        return Task::with('user')
+            ->latest()
+            ->take(10)
+            ->get()
+            ->groupBy('status')
+            ->map(function($tasks) {
+                return $tasks->map(function($task) {
+                    return [
+                        'id' => $task->id,
+                        'title' => $task->title,
+                        'description' => $task->description,
+                        'due_date' => $task->due_date,
+                        'assigned_to' => $task->user->name,
+                        'priority' => $task->priority,
+                    ];
+                });
+            });
     }
 } 

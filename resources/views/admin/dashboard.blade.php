@@ -317,7 +317,6 @@
 
 @push('scripts')
 <script>
-document.addEventListener('DOMContentLoaded', function() {
     // Attendance Chart
     const attendanceCtx = document.getElementById('attendanceChart').getContext('2d');
     const attendanceChart = new Chart(attendanceCtx, {
