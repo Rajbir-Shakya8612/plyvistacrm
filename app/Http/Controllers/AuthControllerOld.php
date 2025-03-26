@@ -21,7 +21,7 @@ class AuthController extends Controller
                 'name' => ['required', 'string', 'max:255'],
                 'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
                 'password' => ['required', 'string', 'min:8'],
-                'role' => ['required', 'string', 'in:admin,salesperson,dealer,carpenter'],
+                'role_id' => ['required|exists:roles,id'],
                 'phone' => ['required', 'string', 'max:20'],
                 'whatsapp_number' => ['required', 'string', 'max:20'],
                 'address' => ['required', 'string'],
@@ -72,11 +72,15 @@ class AuthController extends Controller
 
             $user = Auth::user();
 
+            // Regenerate session ID to prevent session fixation
+            $request->session()->regenerate();
+
             // Create token for API access
             $token = $user->createToken('auth-token')->plainTextToken;
             session(['token' => $token]);
 
-            $request->session()->regenerate();
+            // Set session lifetime
+            config(['session.lifetime' => 120]); // 2 hours
 
             if ($request->wantsJson()) {
                 return response()->json([

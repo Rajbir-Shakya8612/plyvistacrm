@@ -18,6 +18,9 @@
     <!-- SweetAlert2 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
 
+    <!-- Axios -->
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
     <!-- Custom CSS -->
     <style>
         body {
@@ -49,6 +52,31 @@
     
     <!-- SweetAlert2 JS -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <!-- CSRF Token Setup -->
+    <script>
+        // Get CSRF token from meta tag
+        const token = document.head.querySelector('meta[name="csrf-token"]');
+        
+        // Configure Axios
+        if (token) {
+            axios.defaults.headers.common['X-CSRF-TOKEN'] = token.content;
+        }
+
+        // Add CSRF token to all forms
+        document.addEventListener('DOMContentLoaded', function() {
+            const forms = document.querySelectorAll('form');
+            forms.forEach(form => {
+                if (!form.querySelector('input[name="_token"]')) {
+                    const tokenInput = document.createElement('input');
+                    tokenInput.type = 'hidden';
+                    tokenInput.name = '_token';
+                    tokenInput.value = token.content;
+                    form.appendChild(tokenInput);
+                }
+            });
+        });
+    </script>
 
     @stack('scripts')
 </body>

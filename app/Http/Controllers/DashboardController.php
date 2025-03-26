@@ -1,20 +1,13 @@
 <?php
 
-namespace App\Http\Controllers\Salesperson;
+namespace App\Http\Controllers;
 
-use Carbon\Carbon;
-use App\Models\Lead;
 use App\Models\Role;
-use App\Models\Sale;
 use App\Models\User;
-use App\Models\Activity;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use App\Http\Controllers\Controller;
 
 class DashboardController extends Controller
 {
-
     public function index(Request $request)
     {
         $user = $request->user();
@@ -31,7 +24,7 @@ class DashboardController extends Controller
         return view("dashboard.{$role}-dashboard");
     }
 
-     private function getDashboardData($role)
+    private function getDashboardData($role)
     {
         // Add role-specific dashboard data here
         $data = [
@@ -50,4 +43,4 @@ class DashboardController extends Controller
 
         return $data[$role] ?? [];
     }
-} 
+}

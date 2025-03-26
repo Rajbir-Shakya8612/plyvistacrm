@@ -40,7 +40,7 @@ class AuthService {
         try {
             // First try web authentication
             try {
-                const response = await axios.post('/login', credentials, {
+                const response = await axios.post('/api/login', credentials, {
                     headers: {
                         'Accept': 'application/json',
                         'X-Requested-With': 'XMLHttpRequest'
@@ -71,7 +71,7 @@ class AuthService {
         try {
             // Try web logout first
             try {
-                await axios.post('/logout');
+                await axios.post('/api/logout');
             } catch (webError) {
                 // If web logout fails, try API logout
                 await axios.post(`${this.baseURL}/logout`);

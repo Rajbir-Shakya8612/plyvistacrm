@@ -10,7 +10,8 @@
                         <div class="d-flex align-items-center">
                             <div class="flex-grow-1">
                                 <h6 class="text-muted mb-2">Total Salespersons</h6>
-                                <h4 class="mb-0">{{ $totalSalespersons }}</h4>
+                                {{-- <h4 class="mb-0">{{ $totalSalespersons }}</h4> --}}
+                                <h4 class="mb-0">2</h4>
                                 <small class="text-success">
                                     <i class="bi bi-arrow-up"></i> {{ $newSalespersons }} new this month
                                 </small>

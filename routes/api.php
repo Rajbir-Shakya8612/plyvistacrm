@@ -1,43 +1,38 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\AuthController;
+use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\DealerController;
 use App\Http\Controllers\Api\LeadController;
 use App\Http\Controllers\Api\SaleController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\CarpenterController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\SalespersonController;
 use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\PerformanceController;
-use App\Http\Controllers\DealerController;
-use App\Http\Controllers\CarpenterController;
 
-/*
-|--------------------------------------------------------------------------
-| API Routes
-|--------------------------------------------------------------------------
-|
-| Here is where you can register API routes for your application. These
-| routes are loaded by the RouteServiceProvider and all of them will
-| be assigned to the "api" middleware group. Make something great!
-|
-*/
 
-// Public routes
-Route::post('/register', [AuthController::class, 'register'])->name('api.register');
-Route::post('/login', [AuthController::class, 'login'])->name('api.login');
+Route::post('/register', [AuthController::class, 'register']);
+Route::post('/login', [AuthController::class, 'login']);
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/logout', [AuthController::class, 'logout']);
+    Route::get('/user', [AuthController::class, 'user']);
+    Route::get('/dashboard', [DashboardController::class, 'index']);
+});
+
 
 // Protected routes
-Route::middleware('auth:sanctum')->get('/admin/dashboard', [AdminController::class, 'dashboard'])->name('api.admin.dashboard');
-
-Route::middleware(['auth.api','auth:sanctum'])->group(function () {
+Route::middleware(['auth.api'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
 
     // Admin routes
     Route::middleware(['role:admin'])->prefix('admin')->group(function () {
-        
+        // Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('api.admin.dashboard');
         Route::get('/attendance-data', [AdminController::class, 'getAttendanceData']);
         Route::get('/performance-data', [AdminController::class, 'getPerformanceData']);
         Route::get('/recent-activities', [AdminController::class, 'getRecentActivities']);

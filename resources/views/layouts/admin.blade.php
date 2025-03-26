@@ -245,12 +245,12 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="{{ route('admin.reports') }}" class="nav-link {{ request()->routeIs('admin.reports*') ? 'active' : '' }}">
+                        <a href="#" class="nav-link">
                             <i class="bi bi-file-earmark-text"></i> Reports
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="{{ route('admin.settings') }}" class="nav-link {{ request()->routeIs('admin.settings*') ? 'active' : '' }}">
+                        <a href="#" class="nav-link">
                             <i class="bi bi-gear"></i> Settings
                         </a>
                     </li>
@@ -305,7 +305,7 @@
                             <span class="d-none d-md-block text-dark">{{ auth()->user()->name }}</span>
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="profileDropdown">
-                            <li><a class="dropdown-item" href="{{ route('admin.profile') }}">Profile</a></li>
+                            <li><a class="dropdown-item" href="#">Profile</a></li>
                             <li><a class="dropdown-item" href="{{ route('admin.settings') }}">Settings</a></li>
                             <li><hr class="dropdown-divider"></li>
                             <li>
@@ -323,7 +323,7 @@
         </div>
     </div>
 
-    <form id="logout-form" action="{{ route('logout') }}" method="POST" class="d-none">
+    <form id="logout-form" action="#" method="POST" class="d-none">
         @csrf
     </form>
 

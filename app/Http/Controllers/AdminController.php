@@ -7,158 +7,181 @@ use App\Models\Lead;
 use App\Models\Sale;
 use App\Models\Task;
 use App\Models\Attendance;
+use App\Models\Activity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
-use App\Http\Controllers\Controller;
+use Illuminate\Validation\ValidationException;
+use App\Models\Setting;
+use App\Models\Location;
+use App\Models\LocationTrack;
 
 class AdminController extends Controller
 {
     /**
-     * Display admin dashboard data
+     * Show admin dashboard
      */
-    public function dashboard(Request $request)
+    public function dashboard()
     {
-        try {
-            $stats = $this->getDashboardStats();
-            $taskBoard = $this->getTaskBoard();
-            $attendanceData = $this->fetchAttendanceReport($request->get('filter', 'month'));
-            $recentActivities = $this->getRecentActivitiesReport();
+        // Get current date and previous periods
+        $today = Carbon::today();
+        $yesterday = Carbon::yesterday();
+        $thisMonth = Carbon::now()->startOfMonth();
+        $lastMonth = Carbon::now()->subMonth()->startOfMonth();
 
-            if ($request->wantsJson()) {
-                return response()->json([
-                    'success' => true,
-                    'data' => [
-                        'stats' => $stats,
-                        'taskBoard' => $taskBoard,
-                        'attendanceData' => $attendanceData,
-                        'recentActivities' => $recentActivities
-                    ]
-                ]);
-            }
+        // Overview Stats
+        $totalSalespersons = User::where('role', 'salesperson')->count();
+        $newSalespersons = User::where('role', 'salesperson')
+            ->whereMonth('created_at', $today->month)
+            ->count();
 
+        // Attendance Stats
+        $todayAttendance = $this->calculateAttendancePercentage($today);
+        $yesterdayAttendance = $this->calculateAttendancePercentage($yesterday);
+        $attendanceChange = $todayAttendance - $yesterdayAttendance;
 
-            // Return view with data
-            return view('admin.dashboard', [
-                'stats' => $stats,
-                'taskBoard' => $taskBoard,
-                'attendanceData' => $attendanceData,
-                'recentActivities' => $recentActivities,
+        // Leads Stats
+        $totalLeads = Lead::count();
+        $thisMonthLeads = Lead::whereMonth('created_at', $today->month)->count();
+        $lastMonthLeads = Lead::whereMonth('created_at', $lastMonth->month)->count();
+        $leadChange = $lastMonthLeads > 0 
+            ? (($thisMonthLeads - $lastMonthLeads) / $lastMonthLeads) * 100 
+            : 0;
+
+        // Sales Stats
+        $totalSales = Sale::sum('amount');
+        $thisMonthSales = Sale::whereMonth('created_at', $today->month)->sum('amount');
+        $lastMonthSales = Sale::whereMonth('created_at', $lastMonth->month)->sum('amount');
+        $salesChange = $lastMonthSales > 0 
+            ? (($thisMonthSales - $lastMonthSales) / $lastMonthSales) * 100 
+            : 0;
+
+        // Task Board
+        $todoTasks = Task::where('status', 'todo')
+            ->with('assignee')
+            ->orderBy('due_date')
+            ->get();
+
+        $inProgressTasks = Task::where('status', 'in_progress')
+            ->with('assignee')
+            ->orderBy('due_date')
+            ->get();
+
+        $doneTasks = Task::where('status', 'done')
+            ->with('assignee')
+            ->orderBy('created_at', 'desc')
+            ->limit(5)
+            ->get();
+
+        // Recent Activities
+        $recentActivities = Activity::with('user')
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
+            ->get();
+
+        // Attendance Chart Data
+        $attendanceData = $this->getAttendanceData();
+
+        // Performance Chart Data
+        $performanceData = $this->getPerformanceData();
+
+        $salespersons  = User::where('role', 'salesperson')->get();
+
+        $data = [
+            'totalSalespersons' => $totalSalespersons,
+            'newSalespersons' => $newSalespersons,
+            'todayAttendance' => $todayAttendance,
+            'attendanceChange' => $attendanceChange,
+            'totalLeads' => $totalLeads,
+            'leadChange' => $leadChange,
+            'totalSales' => $totalSales,
+            'salesChange' => $salesChange,
+            'todoTasks' => $todoTasks,
+            'inProgressTasks' => $inProgressTasks,
+            'doneTasks' => $doneTasks,
+            'recentActivities' => $recentActivities,
+            'attendanceData' => $attendanceData,
+            'performanceData' => $performanceData,
+            'salespersons' => $salespersons,
+        ];
+        
+
+        if (request()->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'data' => $data
             ]);
-        } catch (\Exception $e) {
-            if ($request->wantsJson()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Failed to fetch dashboard data',
-                    'error' => $e->getMessage()
-                ], 500);
-            }
-            throw $e;
         }
+
+        return view('dashboard.admin-dashboard', $data);
     }
 
-    /**
-     * Get attendance data for chart
-     */
-    private function fetchAttendanceReport(string $filter = 'month')
+    private function calculateAttendancePercentage($date)
     {
-        $startDate = match($filter) {
-            'week' => now()->startOfWeek(),
-            'month' => now()->startOfMonth(),
-            'year' => now()->startOfYear(),
-            default => now()->startOfMonth(),
-        };
+        $totalSalespersons = User::where('role', 'salesperson')->count();
+        if ($totalSalespersons === 0) return 0;
 
-        $data = Attendance::where('created_at', '>=', $startDate)
-            ->get()
-            ->groupBy(function($item) use ($filter) {
-                return match($filter) {
-                    'week' => $item->created_at->format('D'),
-                    'month' => $item->created_at->format('d'),
-                    'year' => $item->created_at->format('M'),
-                };
-            });
+        $presentCount = DB::table('attendances')
+            ->whereDate('date', $date)
+            ->where('status', 'present')
+            ->count();
 
-        $labels = match($filter) {
-            'week' => collect(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']),
-            'month' => collect(range(1, now()->daysInMonth()))->map(fn($day) => (string) $day),
-            'year' => collect(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']),
-        };
+        return round(($presentCount / $totalSalespersons) * 100);
+    }
 
-        $present = $labels->map(fn($label) => 
-            $data->get($label)?->where('status', 'present')->count() ?? 0
-        );
+    private function getAttendanceData()
+    {
+        $days = 30;
+        $present = [];
+        $absent = [];
+        $late = [];
+        $labels = [];
 
-        $absent = $labels->map(fn($label) => 
-            $data->get($label)?->where('status', 'absent')->count() ?? 0
-        );
+        for ($i = $days - 1; $i >= 0; $i--) {
+            $date = Carbon::now()->subDays($i);
+            $labels[] = $date->format('M d');
+            
+            // Get attendance counts for this date
+            $attendance = DB::table('attendances')
+                ->whereDate('date', $date)
+                ->select('status', DB::raw('count(*) as count'))
+                ->groupBy('status')
+                ->get()
+                ->pluck('count', 'status')
+                ->toArray();
 
-        $late = $labels->map(fn($label) => 
-            $data->get($label)?->where('status', 'late')->count() ?? 0
-        );
+            $present[] = $attendance['present'] ?? 0;
+            $absent[] = $attendance['absent'] ?? 0;
+            $late[] = $attendance['late'] ?? 0;
+        }
 
-        return (object) [
+        return (object)[
             'labels' => $labels,
             'present' => $present,
             'absent' => $absent,
-            'late' => $late,
+            'late' => $late
         ];
     }
 
-    /**
-     * Get recent activities
-     */
-    private function getRecentActivitiesReport()
+    private function getPerformanceData()
     {
-        $activities = collect();
+        $months = 12;
+        $data = [];
+        $labels = [];
 
-        // Get recent leads
-        $leads = Lead::with('user')
-            ->latest()
-            ->take(5)
-            ->get()
-            ->map(function($lead) {
-                return [
-                    'type' => 'lead',
-                    'description' => "New lead created by {$lead->user->name}",
-                    'details' => $lead->name,
-                    'created_at' => $lead->created_at,
-                ];
-            });
-        $activities = $activities->concat($leads);
+        for ($i = $months - 1; $i >= 0; $i--) {
+            $date = Carbon::now()->subMonths($i);
+            $labels[] = $date->format('M Y');
+            $data[] = Sale::whereYear('created_at', $date->year)
+                ->whereMonth('created_at', $date->month)
+                ->sum('amount');
+        }
 
-        // Get recent sales
-        $sales = Sale::with('user')
-            ->latest()
-            ->take(5)
-            ->get()
-            ->map(function($sale) {
-                return [
-                    'type' => 'sale',
-                    'description' => "New sale recorded by {$sale->user->name}",
-                    'details' => "₹" . number_format($sale->amount),
-                    'created_at' => $sale->created_at,
-                ];
-            });
-        $activities = $activities->concat($sales);
-
-        // Get recent attendance
-        $attendance = Attendance::with('user')
-            ->latest()
-            ->take(5)
-            ->get()
-            ->map(function($attendance) {
-                return [
-                    'type' => 'attendance',
-                    'description' => "{$attendance->user->name} marked {$attendance->status}",
-                    'details' => $attendance->created_at->format('h:i A'),
-                    'created_at' => $attendance->created_at,
-                ];
-            });
-        $activities = $activities->concat($attendance);
-
-        return $activities->sortByDesc('created_at')->take(10)->values();
+        return (object)[
+            'labels' => $labels,
+            'data' => $data
+        ];
     }
 
     /**
@@ -279,131 +302,478 @@ class AdminController extends Controller
     }
 
     /**
-     * Get attendance data for charts
+     * Get attendance overview data for API
      */
-    public function getAttendanceData(Request $request)
+    public function getAttendanceOverview(Request $request)
     {
-        try {
-            $data = $this->fetchAttendanceReport();
+        $filter = $request->get('filter', 'month');
+        $days = match($filter) {
+            'week' => 7,
+            'month' => 30,
+            'year' => 365,
+            default => 30
+        };
 
-            if ($request->wantsJson()) {
-                return response()->json([
-                    'success' => true,
-                    'data' => $data
-                ]);
-            }
+        $present = [];
+        $absent = [];
+        $late = [];
+        $labels = [];
 
-            return $data;
-        } catch (\Exception $e) {
-            if ($request->wantsJson()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Failed to fetch attendance data',
-                    'error' => $e->getMessage()
-                ], 500);
-            }
-            throw $e;
+        for ($i = $days - 1; $i >= 0; $i--) {
+            $date = Carbon::now()->subDays($i);
+            $labels[] = $date->format('M d');
+            
+            // Get attendance counts for this date
+            $attendance = DB::table('attendances')
+                ->whereDate('date', $date)
+                ->select('status', DB::raw('count(*) as count'))
+                ->groupBy('status')
+                ->get()
+                ->pluck('count', 'status')
+                ->toArray();
+
+            $present[] = $attendance['present'] ?? 0;
+            $absent[] = $attendance['absent'] ?? 0;
+            $late[] = $attendance['late'] ?? 0;
         }
+
+        return response()->json([
+            'labels' => $labels,
+            'present' => $present,
+            'absent' => $absent,
+            'late' => $late
+        ]);
     }
 
     /**
-     * Get performance data
+     * Get performance overview data for API
      */
-    public function getPerformanceData(Request $request)
+    public function getPerformanceOverview(Request $request)
     {
-        try {
-            $data = $this->getPerformanceData();
+        $filter = $request->get('filter', 'month');
+        $months = match($filter) {
+            'week' => 1,
+            'month' => 1,
+            'year' => 12,
+            default => 1
+        };
 
-            if ($request->wantsJson()) {
-                return response()->json([
-                    'success' => true,
-                    'data' => $data
-                ]);
-            }
+        $data = [];
+        $labels = [];
 
-            return $data;
-        } catch (\Exception $e) {
-            if ($request->wantsJson()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Failed to fetch performance data',
-                    'error' => $e->getMessage()
-                ], 500);
-            }
-            throw $e;
+        for ($i = $months - 1; $i >= 0; $i--) {
+            $date = Carbon::now()->subMonths($i);
+            $labels[] = $date->format('M Y');
+            $data[] = Sale::whereYear('created_at', $date->year)
+                ->whereMonth('created_at', $date->month)
+                ->sum('amount');
         }
+
+        return response()->json([
+            'labels' => $labels,
+            'data' => $data
+        ]);
     }
 
     /**
-     * Get recent activities
+     * Get recent activities for API
      */
     public function getRecentActivities(Request $request)
     {
-        try {
-            $activities = $this->getRecentActivitiesReport();
+        $activities = Activity::with('user')
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
+            ->get();
 
-            if ($request->wantsJson()) {
-                return response()->json([
-                    'success' => true,
-                    'data' => $activities
-                ]);
-            }
-
-            return $activities;
-        } catch (\Exception $e) {
-            if ($request->wantsJson()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Failed to fetch recent activities',
-                    'error' => $e->getMessage()
-                ], 500);
-            }
-            throw $e;
-        }
+        return response()->json($activities);
     }
 
     /**
-     * Get dashboard statistics
+     * Tasks Management
      */
-    private function getDashboardStats()
+    public function tasks(Request $request)
     {
-        $today = now();
-        $startOfMonth = $today->copy()->startOfMonth();
-        $startOfYear = $today->copy()->startOfYear();
-
-        return [
-            'total_users' => User::count(),
-            'total_leads' => Lead::count(),
-            'total_sales' => Sale::count(),
-            'monthly_sales' => Sale::where('created_at', '>=', $startOfMonth)->sum('amount'),
-            'yearly_sales' => Sale::where('created_at', '>=', $startOfYear)->sum('amount'),
-            'active_users' => User::where('status', true)->count(),
-            'pending_tasks' => Task::where('status', 'pending')->count(),
-            'completed_tasks' => Task::where('status', 'completed')->count(),
-        ];
-    }
-
-    /**
-     * Get task board data
-     */
-    private function getTaskBoard()
-    {
-        return Task::with('user')
+        $tasks = Task::with('assignee')
+            ->when($request->status, function($query, $status) {
+                $query->where('status', $status);
+            })
+            ->when($request->search, function($query, $search) {
+                $query->where('title', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%");
+            })
             ->latest()
-            ->take(10)
-            ->get()
-            ->groupBy('status')
-            ->map(function($tasks) {
-                return $tasks->map(function($task) {
-                    return [
-                        'id' => $task->id,
-                        'title' => $task->title,
-                        'description' => $task->description,
-                        'due_date' => $task->due_date,
-                        'assigned_to' => $task->user->name,
-                        'priority' => $task->priority,
-                    ];
-                });
-            });
+            ->paginate(10);
+
+        if ($request->wantsJson()) {
+            return response()->json($tasks);
+        }
+
+        return view('admin.tasks.index', compact('tasks'));
+    }
+
+    public function createTask(Request $request)
+    {
+        $validated = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'description' => ['required', 'string'],
+            'type' => ['required', 'string', 'in:lead,sale,meeting'],
+            'assignee_id' => ['required', 'exists:users,id'],
+            'due_date' => ['required', 'date', 'after:today'],
+        ]);
+
+        $task = Task::create($validated);
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'message' => 'Task created successfully',
+                'task' => $task
+            ], 201);
+        }
+
+        return redirect()->route('admin.tasks.index')->with('success', 'Task created successfully');
+    }
+
+    public function showTask(Request $request, Task $task)
+    {
+        $task->load('assignee');
+
+        if ($request->wantsJson()) {
+            return response()->json($task);
+        }
+
+        return view('admin.tasks.show', compact('task'));
+    }
+
+    public function updateTask(Request $request, Task $task)
+    {
+        $validated = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'description' => ['required', 'string'],
+            'type' => ['required', 'string', 'in:lead,sale,meeting'],
+            'assignee_id' => ['required', 'exists:users,id'],
+            'due_date' => ['required', 'date', 'after:today'],
+        ]);
+
+        $task->update($validated);
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'message' => 'Task updated successfully',
+                'task' => $task
+            ]);
+        }
+
+        return redirect()->route('admin.tasks.index')->with('success', 'Task updated successfully');
+    }
+
+    public function deleteTask(Request $request, Task $task)
+    {
+        $task->delete();
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'message' => 'Task deleted successfully'
+            ]);
+        }
+
+        return redirect()->route('admin.tasks.index')->with('success', 'Task deleted successfully');
+    }
+
+    public function updateTaskStatus(Request $request, Task $task)
+    {
+        $validated = $request->validate([
+            'status' => ['required', 'string', 'in:todo,in_progress,done'],
+        ]);
+
+        $task->update($validated);
+
+        if ($validated['status'] === 'done') {
+            $task->update(['completed_at' => now()]);
+        }
+
+        return response()->json([
+            'message' => 'Task status updated successfully',
+            'task' => $task
+        ]);
+    }
+
+    /**
+     * Attendance Management
+     */
+    public function attendance(Request $request)
+    {
+        $date = $request->get('date', now()->format('Y-m-d'));
+        $attendances = Attendance::with('user')
+            ->whereDate('date', $date)
+            ->get();
+
+        if ($request->wantsJson()) {
+            return response()->json($attendances);
+        }
+
+        return view('admin.attendance.index', compact('attendances', 'date'));
+    }
+
+    public function exportAttendance(Request $request)
+    {
+        $startDate = $request->get('start_date', now()->startOfMonth());
+        $endDate = $request->get('end_date', now()->endOfMonth());
+
+        $attendances = Attendance::with('user')
+            ->whereBetween('date', [$startDate, $endDate])
+            ->get();
+
+        // Generate Excel/CSV file
+        // Implementation depends on your export library
+    }
+
+    public function bulkUpdateAttendance(Request $request)
+    {
+        $validated = $request->validate([
+            'date' => ['required', 'date'],
+            'attendances' => ['required', 'array'],
+            'attendances.*.user_id' => ['required', 'exists:users,id'],
+            'attendances.*.status' => ['required', 'string', 'in:present,absent,late'],
+        ]);
+
+        foreach ($validated['attendances'] as $attendance) {
+            Attendance::updateOrCreate(
+                [
+                    'user_id' => $attendance['user_id'],
+                    'date' => $validated['date'],
+                ],
+                ['status' => $attendance['status']]
+            );
+        }
+
+        return response()->json([
+            'message' => 'Attendance updated successfully'
+        ]);
+    }
+
+    /**
+     * Sales Management
+     */
+    public function sales(Request $request)
+    {
+        $sales = Sale::with('user')
+            ->when($request->start_date, function($query, $date) {
+                $query->whereDate('created_at', '>=', $date);
+            })
+            ->when($request->end_date, function($query, $date) {
+                $query->whereDate('created_at', '<=', $date);
+            })
+            ->latest()
+            ->paginate(10);
+
+        if ($request->wantsJson()) {
+            return response()->json($sales);
+        }
+
+        return view('admin.sales.index', compact('sales'));
+    }
+
+    public function exportSales(Request $request)
+    {
+        $startDate = $request->get('start_date', now()->startOfMonth());
+        $endDate = $request->get('end_date', now()->endOfMonth());
+
+        $sales = Sale::with('user')
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->get();
+
+        // Generate Excel/CSV file
+        // Implementation depends on your export library
+    }
+
+    public function salesAnalytics(Request $request)
+    {
+        $period = $request->get('period', 'month');
+        $data = $this->getPerformanceData();
+
+        return response()->json($data);
+    }
+
+    /**
+     * Leads Management
+     */
+    public function leads(Request $request)
+    {
+        $leads = Lead::with('user')
+            ->when($request->status, function($query, $status) {
+                $query->where('status', $status);
+            })
+            ->when($request->search, function($query, $search) {
+                $query->where('name', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%");
+            })
+            ->latest()
+            ->paginate(10);
+
+        if ($request->wantsJson()) {
+            return response()->json($leads);
+        }
+
+        return view('admin.leads.index', compact('leads'));
+    }
+
+    public function exportLeads(Request $request)
+    {
+        $startDate = $request->get('start_date', now()->startOfMonth());
+        $endDate = $request->get('end_date', now()->endOfMonth());
+
+        $leads = Lead::with('user')
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->get();
+
+        // Generate Excel/CSV file
+        // Implementation depends on your export library
+    }
+
+    public function leadsAnalytics(Request $request)
+    {
+        $period = $request->get('period', 'month');
+        $data = [
+            'total' => Lead::count(),
+            'converted' => Lead::where('status', 'converted')->count(),
+            'pending' => Lead::where('status', 'pending')->count(),
+            'lost' => Lead::where('status', 'lost')->count(),
+        ];
+
+        return response()->json($data);
+    }
+
+    /**
+     * Settings Management
+     */
+    public function settings(Request $request)
+    {
+        $settings = Setting::all()->pluck('value', 'key');
+
+        if ($request->wantsJson()) {
+            return response()->json($settings);
+        }
+
+        return view('admin.settings.index', compact('settings'));
+    }
+
+    public function updateSettings(Request $request)
+    {
+        $validated = $request->validate([
+            'company_name' => ['required', 'string', 'max:255'],
+            'company_address' => ['required', 'string'],
+            'company_phone' => ['required', 'string', 'max:20'],
+            'company_email' => ['required', 'email'],
+            'working_hours' => ['required', 'string'],
+            'attendance_time' => ['required', 'date_format:H:i'],
+        ]);
+
+        foreach ($validated as $key => $value) {
+            Setting::updateOrCreate(
+                ['key' => $key],
+                ['value' => $value]
+            );
+        }
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'message' => 'Settings updated successfully'
+            ]);
+        }
+
+        return back()->with('success', 'Settings updated successfully');
+    }
+
+    /**
+     * Location Tracking Management
+     */
+    public function locations(Request $request)
+    {
+        $tracks = LocationTrack::with('user')
+            ->when($request->user_id, function($query, $userId) {
+                $query->where('user_id', $userId);
+            })
+            ->when($request->date, function($query, $date) {
+                $query->whereDate('tracked_at', $date);
+            })
+            ->latest()
+            ->paginate(10);
+
+        if ($request->wantsJson()) {
+            return response()->json($tracks);
+        }
+
+        return view('admin.locations.index', compact('tracks'));
+    }
+
+    public function createLocation(Request $request)
+    {
+        $validated = $request->validate([
+            'user_id' => ['required', 'exists:users,id'],
+            'latitude' => ['required', 'numeric', 'between:-90,90'],
+            'longitude' => ['required', 'numeric', 'between:-180,180'],
+            'address' => ['nullable', 'string'],
+            'speed' => ['nullable', 'string'],
+            'accuracy' => ['nullable', 'string'],
+            'tracked_at' => ['required', 'date'],
+        ]);
+
+        $track = LocationTrack::create($validated);
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'message' => 'Location tracked successfully',
+                'track' => $track
+            ], 201);
+        }
+
+        return redirect()->route('admin.locations.index')->with('success', 'Location tracked successfully');
+    }
+
+    public function showLocation(Request $request, LocationTrack $track)
+    {
+        $track->load('user');
+
+        if ($request->wantsJson()) {
+            return response()->json($track);
+        }
+
+        return view('admin.locations.show', compact('track'));
+    }
+
+    public function updateLocation(Request $request, LocationTrack $track)
+    {
+        $validated = $request->validate([
+            'latitude' => ['required', 'numeric', 'between:-90,90'],
+            'longitude' => ['required', 'numeric', 'between:-180,180'],
+            'address' => ['nullable', 'string'],
+            'speed' => ['nullable', 'string'],
+            'accuracy' => ['nullable', 'string'],
+            'tracked_at' => ['required', 'date'],
+        ]);
+
+        $track->update($validated);
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'message' => 'Location track updated successfully',
+                'track' => $track
+            ]);
+        }
+
+        return redirect()->route('admin.locations.index')->with('success', 'Location track updated successfully');
+    }
+
+    public function deleteLocation(Request $request, LocationTrack $track)
+    {
+        $track->delete();
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'message' => 'Location track deleted successfully'
+            ]);
+        }
+
+        return redirect()->route('admin.locations.index')->with('success', 'Location track deleted successfully');
     }
 } 

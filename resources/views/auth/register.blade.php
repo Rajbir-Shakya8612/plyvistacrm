@@ -12,18 +12,31 @@
                         <p class="text-muted">Please fill in the details to register</p>
                     </div>
 
-                    <form id="registerForm" class="needs-validation" novalidate>
+                    <form method="POST" action="{{ route('register') }}" id="registerForm">
+                        @csrf
+                        <input type="hidden" name="_token" value="{{ csrf_token() }}">
+
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="name" class="form-label">Full Name</label>
                                 <input type="text" class="form-control" id="name" name="name" required>
                                 <div class="invalid-feedback">Please enter your full name.</div>
+                                 @error('name')
+                                    <span class="invalid-feedback" role="alert">
+                                        <strong>{{ $message }}</strong>
+                                    </span>
+                                @enderror
                             </div>
 
                             <div class="col-md-6 mb-3">
                                 <label for="email" class="form-label">Email Address</label>
                                 <input type="email" class="form-control" id="email" name="email" required>
                                 <div class="invalid-feedback">Please enter a valid email address.</div>
+                                @error('email')
+                                    <span class="invalid-feedback" role="alert">
+                                        <strong>{{ $message }}</strong>
+                                    </span>
+                                @enderror
                             </div>
                         </div>
 
@@ -32,6 +45,11 @@
                                 <label for="phone" class="form-label">Phone Number</label>
                                 <input type="tel" class="form-control" id="phone" name="phone" required>
                                 <div class="invalid-feedback">Please enter your phone number.</div>
+                                 @error('password')
+                                    <span class="invalid-feedback" role="alert">
+                                        <strong>{{ $message }}</strong>
+                                    </span>
+                                @enderror
                             </div>
 
                             <div class="col-md-6 mb-3">
@@ -42,13 +60,14 @@
                         </div>
 
                         <div class="mb-3">
-                            <label for="role" class="form-label">Role</label>
-                            <select class="form-select" id="role" name="role" required>
-                                <option value="">Select Role</option>
-                                <option value="admin">Admin</option>
-                                <option value="salesperson">Salesperson</option>
-                                <option value="dealer">Dealer</option>
-                                <option value="carpenter">Carpenter</option>
+                            <label for="role_id" class="form-label">Role</label>
+                            <select class="form-select @error('role_id') is-invalid @enderror" id="role_id" name="role_id" required>
+                                <option value="">Select a role</option>
+                                @foreach(\App\Models\Role::all() as $role)
+                                    <option value="{{ $role->id }}" {{ old('role_id') == $role->id ? 'selected' : '' }}>
+                                        {{ $role->name }}
+                                    </option>
+                                @endforeach
                             </select>
                             <div class="invalid-feedback">Please select your role.</div>
                         </div>
@@ -77,12 +96,17 @@
                             <div class="col-md-6 mb-3">
                                 <label for="password" class="form-label">Password</label>
                                 <div class="input-group">
-                                    <input type="password" class="form-control" id="password" name="password" required>
+                                    <input type="password" class="form-control @error('password') is-invalid @enderror" id="password" name="password" required>
                                     <button class="btn btn-outline-secondary" type="button" id="togglePassword">
                                         <i class="bi bi-eye"></i>
                                     </button>
                                 </div>
                                 <div class="invalid-feedback">Please enter a password.</div>
+                                @error('password')
+                                    <span class="invalid-feedback" role="alert">
+                                        <strong>{{ $message }}</strong>
+                                    </span>
+                                @enderror
                             </div>
 
                             <div class="col-md-6 mb-3">
@@ -165,7 +189,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const response = await axios.post('/api/register', Object.fromEntries(formData), {
                 headers: {
                     'Accept': 'application/json',
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                 }
             });
 
